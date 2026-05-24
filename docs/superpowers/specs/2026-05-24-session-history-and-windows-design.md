@@ -92,7 +92,11 @@ exists only as the single `allTime.lootTally`.
 
 ## Session lifecycle
 
-- **Active account** = `client.getLocalPlayer().getName()` (RSN) once logged in.
+- **Active account** = `client.getLocalPlayer().getName()` (RSN) once logged in. Because
+  `getLocalPlayer()` can be `null` at the exact `LOGGED_IN` moment, the account is resolved on the
+  first tick where it is non-null. This RSN is the single account identity used throughout v2 and
+  **replaces v1's `getUsername()`-based account-change detection** (`SessionTracker.onLogin`),
+  keeping detection and history keying consistent.
 - **On `LOGIN_SCREEN`:** snapshot the current session into the active account's `pending` slot
   with `logoutMs = now`; save (off-thread). Do **not** roll into all-time yet (avoids double
   counting if the player relogs).
