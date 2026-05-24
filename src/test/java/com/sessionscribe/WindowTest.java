@@ -17,6 +17,14 @@ public class WindowTest
 		assertTrue(Window.WEEK.isRolling());
 		assertFalse(Window.CURRENT.isRolling());
 		assertFalse(Window.ALL_TIME.isRolling());
+	}
+
+	@Test
+	public void labelsMatchDisplayStrings()
+	{
 		assertEquals("Current session", Window.CURRENT.label());
+		assertEquals("Last 24 hours", Window.DAY.label());
+		assertEquals("This week", Window.WEEK.label());
+		assertEquals("All time", Window.ALL_TIME.label());
 	}
 }
