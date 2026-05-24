@@ -5,13 +5,13 @@ import java.util.EnumMap;
 import java.util.Map;
 import net.runelite.api.Skill;
 
-/** An immutable record of one completed session. Per-item loot is not stored here. */
+/** A record of one completed session (stable after construction). Per-item loot is not stored here. */
 final class SessionRecord
 {
 	long startMs;
 	long endMs;
 	long durationMs;
-	Map<Skill, Integer> xpBySkill;
+	Map<Skill, Integer> xpBySkill = new EnumMap<>(Skill.class);
 	long lootValue;
 	int kills;
 

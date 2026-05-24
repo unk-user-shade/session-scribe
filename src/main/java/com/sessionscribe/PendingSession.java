@@ -14,5 +14,5 @@ final class PendingSession
 	long lootValue;
 	int kills;
 	Map<Integer, Integer> lootTally = new HashMap<>();
-	long logoutMs;
+	long logoutMs; // wall-clock time of the last logout event (for the relog-gap check, not session end)
 }
