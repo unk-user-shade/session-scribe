@@ -4,9 +4,6 @@ A single end-of-session recap for Old School RuneScape, in one RuneLite side pan
 Session Scribe aggregates data the client already exposes — XP, loot, kills, and time —
 into one view, plus a screenshot-friendly "report card" you can copy or save.
 
-![Session Scribe panel and report card](docs/screenshot.png)
-<!-- TODO: replace docs/screenshot.png with a real screenshot of the panel / report card -->
-
 ## Features
 
 - **Live side panel**, refreshed each game tick:
