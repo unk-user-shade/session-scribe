@@ -1,5 +1,13 @@
 package com.sessionscribe;
 
+import com.google.gson.Gson;
+import java.io.File;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -9,35 +17,52 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntUnaryOperator;
+import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Skill;
+import net.runelite.client.RuneLite;
 
 /** In-memory per-account session history with aggregation, retention, and JSON persistence. */
+@Slf4j
 @Singleton
 class SessionStore
 {
 	static final int MAX_LOOT_ENTRIES = 1000;
 	static final long RETENTION_MS = TimeUnit.DAYS.toMillis(90);
 
+	private static final int VERSION = 1;
+
+	@Inject
+	private Gson gson;
+
+	/** Serializable top-level shape of history.json. */
+	private static final class HistoryFile
+	{
+		int version = VERSION;
+		Map<String, AccountHistory> accounts = new LinkedHashMap<>();
+	}
+
 	private Map<String, AccountHistory> accounts = new LinkedHashMap<>();
 
-	Set<String> accounts()
+	synchronized Set<String> accounts()
 	{
 		return new LinkedHashMap<>(accounts).keySet();
 	}
 
-	void clearAll()
+	synchronized void clearAll()
 	{
 		accounts.clear();
 	}
 
-	void clearAccount(String account)
+	synchronized void clearAccount(String account)
 	{
 		accounts.remove(account);
 	}
 
 	/** Append a completed session, roll it into all-time totals, and prune old detailed rows. */
-	void finalizeSession(String account, SessionRecord record, Map<Integer, Integer> lootTally, IntUnaryOperator priceFn)
+	synchronized void finalizeSession(String account, SessionRecord record, Map<Integer, Integer> lootTally,
+		IntUnaryOperator priceFn)
 	{
 		AccountHistory history = accounts.computeIfAbsent(account, k -> new AccountHistory());
 		history.sessions.add(record);
@@ -60,7 +85,7 @@ class SessionStore
 	 * Aggregates stats for one (account, window). The returned {@link Aggregate} carries an itemized
 	 * {@code lootTally} for CURRENT and ALL_TIME, and {@code null} for the rolling DAY / WEEK windows.
 	 */
-	Aggregate aggregate(String account, Window window, long now, SessionRecord current,
+	synchronized Aggregate aggregate(String account, Window window, long now, SessionRecord current,
 		Map<Integer, Integer> currentLootTally, IntUnaryOperator priceFn)
 	{
 		if (window == Window.CURRENT)
@@ -129,6 +154,113 @@ class SessionStore
 			addXp(xp, current.xpBySkill);
 		}
 		return new Aggregate(durationMs, xp, lootValue, kills, null);
+	}
+
+	synchronized void load()
+	{
+		File file = historyFile();
+		if (!file.exists())
+		{
+			accounts = new LinkedHashMap<>();
+			return;
+		}
+		try (Reader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8))
+		{
+			HistoryFile parsed = gson().fromJson(reader, HistoryFile.class);
+			accounts = parsed != null && parsed.accounts != null ? parsed.accounts : new LinkedHashMap<>();
+		}
+		catch (Exception e)
+		{
+			log.warn("Could not read session history; backing up and starting fresh", e);
+			backup(file);
+			accounts = new LinkedHashMap<>();
+		}
+	}
+
+	synchronized void save()
+	{
+		File file = historyFile();
+		File dir = file.getParentFile();
+		if (dir != null && !dir.exists() && !dir.mkdirs())
+		{
+			log.warn("Could not create history directory: {}", dir);
+			return;
+		}
+
+		File tmp = new File(file.getParentFile(), file.getName() + ".tmp");
+		try (Writer writer = Files.newBufferedWriter(tmp.toPath(), StandardCharsets.UTF_8))
+		{
+			HistoryFile out = new HistoryFile();
+			out.accounts = accounts;
+			gson().toJson(out, writer);
+		}
+		catch (IOException e)
+		{
+			log.warn("Could not write session history", e);
+			return;
+		}
+
+		try
+		{
+			Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
+		}
+		catch (IOException e)
+		{
+			log.warn("Could not replace session history file", e);
+		}
+	}
+
+	static boolean withinGap(long logoutMs, long now, long gapMs)
+	{
+		return logoutMs > 0 && (now - logoutMs) <= gapMs;
+	}
+
+	static String toJson(Gson gson, Map<String, AccountHistory> accounts)
+	{
+		HistoryFile out = new HistoryFile();
+		out.accounts = accounts;
+		return gson.toJson(out);
+	}
+
+	static Map<String, AccountHistory> fromJson(Gson gson, String json)
+	{
+		try
+		{
+			HistoryFile parsed = gson.fromJson(json, HistoryFile.class);
+			return parsed != null && parsed.accounts != null ? parsed.accounts : new LinkedHashMap<>();
+		}
+		catch (Exception e)
+		{
+			return new LinkedHashMap<>();
+		}
+	}
+
+	synchronized Map<String, AccountHistory> exportForTest()
+	{
+		return accounts;
+	}
+
+	private Gson gson()
+	{
+		return gson == null ? new Gson() : gson;
+	}
+
+	private static File historyFile()
+	{
+		return new File(RuneLite.RUNELITE_DIR, "session-scribe" + File.separator + "history.json");
+	}
+
+	private static void backup(File file)
+	{
+		try
+		{
+			Files.move(file.toPath(), new File(file.getParentFile(), file.getName() + ".corrupt").toPath(),
+				StandardCopyOption.REPLACE_EXISTING);
+		}
+		catch (IOException ignored)
+		{
+			// Best effort; the next save can still replace the unreadable history file.
+		}
 	}
 
 	private static Aggregate emptyAggregate(Map<Integer, Integer> tally)
