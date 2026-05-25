@@ -56,6 +56,10 @@ class SessionStore
 		pruneOldSessions(history, record.endMs);
 	}
 
+	/**
+	 * Aggregates stats for one (account, window). The returned {@link Aggregate} carries an itemized
+	 * {@code lootTally} for CURRENT and ALL_TIME, and {@code null} for the rolling DAY / WEEK windows.
+	 */
 	Aggregate aggregate(String account, Window window, long now, SessionRecord current,
 		Map<Integer, Integer> currentLootTally, IntUnaryOperator priceFn)
 	{

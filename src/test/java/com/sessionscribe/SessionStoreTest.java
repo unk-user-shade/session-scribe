@@ -67,4 +67,15 @@ public class SessionStoreTest
 		assertTrue(all.lootTally.containsKey(9_999_999));
 		assertFalse(all.lootTally.containsKey(1));
 	}
+
+	@Test
+	public void currentWindowHandlesEmptyXpSession()
+	{
+		SessionStore store = new SessionStore();
+		IntUnaryOperator price = id -> id;
+		SessionRecord current = new SessionRecord(0, 1000, 1000, null, 0, 0);
+		Aggregate agg = store.aggregate("Z", Window.CURRENT, 2000, current, new HashMap<>(), price);
+		assertEquals(1000L, agg.durationMs);
+		assertTrue(agg.xpBySkill.isEmpty());
+	}
 }

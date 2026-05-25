@@ -1,6 +1,5 @@
 package com.sessionscribe;
 
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
 import net.runelite.api.Skill;
@@ -21,7 +20,7 @@ final class SessionRecord
 		this.startMs = startMs;
 		this.endMs = endMs;
 		this.durationMs = durationMs;
-		this.xpBySkill = xpBySkill == null ? Collections.emptyMap() : new EnumMap<>(xpBySkill);
+		this.xpBySkill = (xpBySkill == null || xpBySkill.isEmpty()) ? new EnumMap<>(Skill.class) : new EnumMap<>(xpBySkill);
 		this.lootValue = lootValue;
 		this.kills = kills;
 	}
