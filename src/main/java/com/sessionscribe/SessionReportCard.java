@@ -53,7 +53,7 @@ final class SessionReportCard
 	{
 	}
 
-	static BufferedImage render(Snapshot snapshot, boolean rounded)
+	static BufferedImage render(Snapshot snapshot, boolean rounded, String subtitle)
 	{
 		final List<SkillRow> skills = snapshot.skillRows();
 		final List<LootRow> drops = snapshot.lootRows();
@@ -63,6 +63,7 @@ final class SessionReportCard
 		final int height = PAD
 			+ TITLE_H
 			+ SMALL              // date
+			+ SMALL              // subtitle
 			+ SMALL              // duration
 			+ GAP                // divider
 			+ 3 * LINE           // xp / loot / kills
@@ -87,6 +88,7 @@ final class SessionReportCard
 
 		y = left(g, "Session Scribe", PAD, y, TITLE_FONT, TITLE, TITLE_H);
 		y = left(g, DATE_FMT.format(LocalDateTime.now()), PAD, y, DATE_FONT, MUTED, SMALL);
+		y = left(g, subtitle, PAD, y, DATE_FONT, MUTED, SMALL);
 		y = leftRight(g, "Session time", formatDuration(snapshot.elapsedMillis()), PAD, right, y, DATE_FONT, MUTED, TEXT, SMALL);
 
 		g.setColor(MUTED);

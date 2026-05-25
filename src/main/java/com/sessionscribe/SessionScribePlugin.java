@@ -263,7 +263,7 @@ public class SessionScribePlugin extends Plugin
 		// Build the snapshot on the client thread, then place the rendered image on the clipboard (EDT).
 		clientThread.invoke(() ->
 		{
-			final BufferedImage image = SessionReportCard.render(buildSnapshot(), config.roundValues());
+			final BufferedImage image = SessionReportCard.render(buildSnapshot(), config.roundValues(), selectedSubtitle());
 			SwingUtilities.invokeLater(() ->
 			{
 				Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new ImageTransferable(image), null);
@@ -276,7 +276,7 @@ public class SessionScribePlugin extends Plugin
 	{
 		clientThread.invoke(() ->
 		{
-			final BufferedImage image = SessionReportCard.render(buildSnapshot(), config.roundValues());
+			final BufferedImage image = SessionReportCard.render(buildSnapshot(), config.roundValues(), selectedSubtitle());
 			String message;
 			try
 			{
@@ -330,6 +330,12 @@ public class SessionScribePlugin extends Plugin
 		final Aggregate aggregate = store.aggregate(account, window, System.currentTimeMillis(),
 			live, liveTally, itemManager::getItemPrice);
 		return toSnapshot(aggregate, window == Window.CURRENT || window == Window.ALL_TIME);
+	}
+
+	private String selectedSubtitle()
+	{
+		final String account = selectedAccount != null ? selectedAccount : currentAccount;
+		return (account == null ? "Unknown" : account) + " - " + selectedWindow.label();
 	}
 
 	private SessionScribePanel.Snapshot toSnapshot(Aggregate aggregate, boolean itemized)

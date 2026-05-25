@@ -30,7 +30,7 @@ public class SessionReportCardTest
 			Arrays.asList(new SkillRow(Skill.SLAYER, 12_345), new SkillRow(Skill.ATTACK, 5_000)),
 			Arrays.asList(new LootRow("Dragon bones", 12, 24_000, null), new LootRow("Coins", 1_000, 1_000, null)));
 
-		final BufferedImage image = SessionReportCard.render(snapshot, false);
+		final BufferedImage image = SessionReportCard.render(snapshot, false, "Zezima - All time");
 		assertNotNull(image);
 		assertTrue(image.getWidth() > 0);
 		assertTrue(image.getHeight() > 0);
