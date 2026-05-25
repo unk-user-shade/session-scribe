@@ -80,7 +80,8 @@ public class SessionScribePlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
-		panel = new SessionScribePanel(config, this::requestNewSession, this::requestCopyImage, this::requestSaveImage);
+		panel = new SessionScribePanel(config, this::requestNewSession, this::requestCopyImage,
+			this::requestSaveImage, this::onSelectionChanged);
 
 		final BufferedImage icon = ImageUtil.loadImageResource(SessionScribePlugin.class, "icon.png");
 		navButton = NavigationButton.builder()
@@ -299,14 +300,42 @@ public class SessionScribePlugin extends Plugin
 		{
 			return;
 		}
-		final SessionScribePanel.Snapshot snapshot = buildSnapshot();
-		SwingUtilities.invokeLater(() -> panel.render(snapshot));
+		final String account = selectedAccount != null ? selectedAccount : currentAccount;
+		final Window window = selectedWindow;
+		final SessionRecord live = (account != null && account.equals(currentAccount)) ? snapshotRecord() : null;
+		final Map<Integer, Integer> liveTally = live != null ? tracker.getLootTally() : null;
+		final Aggregate aggregate = store.aggregate(account, window, System.currentTimeMillis(),
+			live, liveTally, itemManager::getItemPrice);
+		final boolean itemized = window == Window.CURRENT || window == Window.ALL_TIME;
+		final SessionScribePanel.Snapshot snapshot = toSnapshot(aggregate, itemized);
+		final List<String> accountList = new ArrayList<>(store.accounts());
+		if (currentAccount != null && !accountList.contains(currentAccount))
+		{
+			accountList.add(currentAccount);
+		}
+		final String selected = account;
+		SwingUtilities.invokeLater(() ->
+		{
+			panel.setAccounts(accountList, selected);
+			panel.render(snapshot);
+		});
 	}
 
 	private SessionScribePanel.Snapshot buildSnapshot()
 	{
+		final String account = selectedAccount != null ? selectedAccount : currentAccount;
+		final Window window = selectedWindow;
+		final SessionRecord live = (account != null && account.equals(currentAccount)) ? snapshotRecord() : null;
+		final Map<Integer, Integer> liveTally = live != null ? tracker.getLootTally() : null;
+		final Aggregate aggregate = store.aggregate(account, window, System.currentTimeMillis(),
+			live, liveTally, itemManager::getItemPrice);
+		return toSnapshot(aggregate, window == Window.CURRENT || window == Window.ALL_TIME);
+	}
+
+	private SessionScribePanel.Snapshot toSnapshot(Aggregate aggregate, boolean itemized)
+	{
 		final List<SessionScribePanel.SkillRow> skillRows = new ArrayList<>();
-		for (Map.Entry<Skill, Integer> entry : tracker.getXpBySkill().entrySet())
+		for (Map.Entry<Skill, Integer> entry : aggregate.xpBySkill.entrySet())
 		{
 			if (entry.getValue() > 0)
 			{
@@ -316,28 +345,33 @@ public class SessionScribePlugin extends Plugin
 		skillRows.sort((a, b) -> Integer.compare(b.gainedXp(), a.gainedXp()));
 
 		final List<SessionScribePanel.LootRow> lootRows = new ArrayList<>();
-		for (Map.Entry<Integer, Integer> entry : tracker.getLootTally().entrySet())
+		if (itemized && aggregate.lootTally != null)
 		{
-			final int itemId = entry.getKey();
-			final int quantity = entry.getValue();
-			final long value = (long) itemManager.getItemPrice(itemId) * quantity;
-			final String name = itemManager.getItemComposition(itemId).getName();
-			final AsyncBufferedImage image = itemManager.getImage(itemId, quantity, quantity > 1);
-			lootRows.add(new SessionScribePanel.LootRow(name, quantity, value, image));
+			for (Map.Entry<Integer, Integer> entry : aggregate.lootTally.entrySet())
+			{
+				final int itemId = entry.getKey();
+				final int quantity = entry.getValue();
+				final long value = (long) itemManager.getItemPrice(itemId) * quantity;
+				final String name = itemManager.getItemComposition(itemId).getName();
+				final AsyncBufferedImage image = itemManager.getImage(itemId, quantity, quantity > 1);
+				lootRows.add(new SessionScribePanel.LootRow(name, quantity, value, image));
+			}
+			lootRows.sort((a, b) -> Long.compare(b.value(), a.value()));
 		}
-		lootRows.sort((a, b) -> Long.compare(b.value(), a.value()));
 
 		final List<SessionScribePanel.LootRow> topLoot = lootRows.size() > MAX_LOOT_ROWS
 			? new ArrayList<>(lootRows.subList(0, MAX_LOOT_ROWS))
 			: lootRows;
 
-		return new SessionScribePanel.Snapshot(
-			tracker.getElapsedMillis(),
-			tracker.getTotalXp(),
-			tracker.getTotalLootValue(),
-			tracker.getKills(),
-			skillRows,
-			topLoot);
+		return new SessionScribePanel.Snapshot(aggregate.durationMs, aggregate.totalXp(),
+			aggregate.lootValue, aggregate.kills, skillRows, topLoot);
+	}
+
+	void onSelectionChanged(String account, Window window)
+	{
+		selectedAccount = account;
+		selectedWindow = window;
+		clientThread.invoke(this::pushUpdate);
 	}
 
 	@Provides

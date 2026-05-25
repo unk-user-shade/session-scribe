@@ -20,4 +20,14 @@ final class Aggregate
 		this.kills = kills;
 		this.lootTally = lootTally;
 	}
+
+	long totalXp()
+	{
+		long total = 0;
+		for (int gain : xpBySkill.values())
+		{
+			total += gain;
+		}
+		return total;
+	}
 }

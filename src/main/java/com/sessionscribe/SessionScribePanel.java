@@ -5,9 +5,12 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.util.List;
+import java.util.function.BiConsumer;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
+import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
@@ -27,23 +30,36 @@ public class SessionScribePanel extends PluginPanel
 	private final JLabel gpValue = statValue();
 	private final JLabel killsValue = statValue();
 
+	private final JComboBox<String> accountSelector = new JComboBox<>();
+	private final JComboBox<Window> windowSelector = new JComboBox<>(Window.values());
 	private final JButton skillToggle = new JButton();
 	private final JPanel skillBody = new JPanel();
 	private final JPanel lootBody = new JPanel();
 	private final JLabel status = new JLabel(" ");
 
 	private final SessionScribeConfig config;
+	private final BiConsumer<String, Window> onSelectionChanged;
 	private boolean skillsExpanded;
+	private boolean updatingAccounts;
 
-	public SessionScribePanel(SessionScribeConfig config, Runnable onNewSession, Runnable onCopyImage, Runnable onSaveImage)
+	public SessionScribePanel(SessionScribeConfig config, Runnable onNewSession, Runnable onCopyImage,
+		Runnable onSaveImage, BiConsumer<String, Window> onSelectionChanged)
 	{
 		this.config = config;
+		this.onSelectionChanged = onSelectionChanged;
 		setLayout(new BorderLayout());
 
 		final JPanel content = new JPanel();
 		content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
 
 		content.add(sectionLabel("Session Scribe"));
+
+		final JPanel selectors = new JPanel(new GridLayout(0, 1, 0, 4));
+		accountSelector.addActionListener(e -> fireSelection());
+		windowSelector.addActionListener(e -> fireSelection());
+		selectors.add(accountSelector);
+		selectors.add(windowSelector);
+		content.add(selectors);
 
 		final JPanel stats = new JPanel(new GridLayout(0, 2, 6, 4));
 		stats.setBorder(BorderFactory.createEmptyBorder(6, 0, 6, 0));
@@ -136,10 +152,47 @@ public class SessionScribePanel extends PluginPanel
 		repaint();
 	}
 
+	/** Refresh the account dropdown contents without firing the listener. */
+	public void setAccounts(List<String> accounts, String selected)
+	{
+		updatingAccounts = true;
+		try
+		{
+			final DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
+			for (String account : accounts)
+			{
+				model.addElement(account);
+			}
+			accountSelector.setModel(model);
+			if (selected != null)
+			{
+				accountSelector.setSelectedItem(selected);
+			}
+		}
+		finally
+		{
+			updatingAccounts = false;
+		}
+	}
+
 	/** Show a one-line result after an export. Must be called on the EDT. */
 	public void showExportStatus(String message)
 	{
 		status.setText(message);
+	}
+
+	private void fireSelection()
+	{
+		if (updatingAccounts)
+		{
+			return;
+		}
+		final Object account = accountSelector.getSelectedItem();
+		final Object window = windowSelector.getSelectedItem();
+		if (window != null)
+		{
+			onSelectionChanged.accept(account == null ? null : account.toString(), (Window) window);
+		}
 	}
 
 	private void toggleSkills()
