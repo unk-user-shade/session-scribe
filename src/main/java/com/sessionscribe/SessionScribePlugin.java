@@ -158,6 +158,10 @@ public class SessionScribePlugin extends Plugin
 	@Subscribe
 	public void onGameTick(GameTick tick)
 	{
+		if (client.getGameState() == GameState.LOGGED_IN && currentAccount == null)
+		{
+			handleLogin();
+		}
 		final long now = System.currentTimeMillis();
 		if (now - lastRefresh < REFRESH_THROTTLE_MS)
 		{
@@ -194,6 +198,7 @@ public class SessionScribePlugin extends Plugin
 				selectedAccount = account;
 			}
 			pendingLogoutMs = 0;
+			pushUpdate();
 			return;
 		}
 
@@ -322,7 +327,7 @@ public class SessionScribePlugin extends Plugin
 		}
 		final String account = selectedAccount != null ? selectedAccount : currentAccount;
 		final Window window = selectedWindow;
-		final SessionRecord live = (account != null && account.equals(currentAccount)) ? snapshotRecord() : null;
+		final SessionRecord live = shouldIncludeLive(account) ? snapshotRecord() : null;
 		final Map<Integer, Integer> liveTally = live != null ? tracker.getLootTally() : null;
 		final Aggregate aggregate = store.aggregate(account, window, System.currentTimeMillis(),
 			live, liveTally, itemManager::getItemPrice);
@@ -345,11 +350,16 @@ public class SessionScribePlugin extends Plugin
 	{
 		final String account = selectedAccount != null ? selectedAccount : currentAccount;
 		final Window window = selectedWindow;
-		final SessionRecord live = (account != null && account.equals(currentAccount)) ? snapshotRecord() : null;
+		final SessionRecord live = shouldIncludeLive(account) ? snapshotRecord() : null;
 		final Map<Integer, Integer> liveTally = live != null ? tracker.getLootTally() : null;
 		final Aggregate aggregate = store.aggregate(account, window, System.currentTimeMillis(),
 			live, liveTally, itemManager::getItemPrice);
 		return toSnapshot(aggregate, window == Window.CURRENT || window == Window.ALL_TIME);
+	}
+
+	private boolean shouldIncludeLive(String account)
+	{
+		return account == null || account.equals(currentAccount);
 	}
 
 	private String selectedSubtitle()

@@ -160,9 +160,18 @@ public class SessionScribePanel extends PluginPanel
 		try
 		{
 			final DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
-			for (String account : accounts)
+			if (accounts.isEmpty())
 			{
-				model.addElement(account);
+				model.addElement("No account yet");
+				accountSelector.setEnabled(false);
+			}
+			else
+			{
+				accountSelector.setEnabled(true);
+				for (String account : accounts)
+				{
+					model.addElement(account);
+				}
 			}
 			accountSelector.setModel(model);
 			if (selected != null)
@@ -184,7 +193,7 @@ public class SessionScribePanel extends PluginPanel
 
 	private void fireSelection()
 	{
-		if (updatingAccounts)
+		if (updatingAccounts || !accountSelector.isEnabled())
 		{
 			return;
 		}
