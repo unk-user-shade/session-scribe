@@ -4,11 +4,9 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.IntUnaryOperator;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import net.runelite.api.Client;
 import net.runelite.api.Skill;
 import net.runelite.client.game.ItemManager;
 
@@ -17,8 +15,8 @@ import net.runelite.client.game.ItemManager;
  * quantities, kills, and elapsed time. Nothing is persisted while tracking.
  *
  * Threading: every mutator must run on the client thread. Game events (StatChanged, loot,
- * GameStateChanged) are already dispatched there; the single start-up {@link #reset()} is
- * wrapped in {@code ClientThread#invoke} by the plugin.
+ * GameStateChanged) are already dispatched there; reset calls are wrapped in
+ * {@code ClientThread#invoke} by the plugin.
  *
  * Honest limitation: a kill is only counted when it produces an NpcLootReceived event.
  * Drop-less kills (nothing dropped) are NOT counted.
@@ -30,13 +28,9 @@ public class SessionTracker
 	static final int MAX_LOOT_ENTRIES = 1000;
 
 	@Inject
-	private Client client;
-
-	@Inject
 	private ItemManager itemManager;
 
 	private long sessionStart = System.currentTimeMillis();
-	private String lastUsername;
 
 	private final Map<Skill, Integer> baseline = new EnumMap<>(Skill.class);
 	private final Map<Skill, Integer> gained = new EnumMap<>(Skill.class);
@@ -51,20 +45,7 @@ public class SessionTracker
 		gained.clear();
 		loot.clear();
 		kills = 0;
-		// Baselines are (re)established lazily by the first StatChanged per skill after a reset
-		// (see recordXp). We deliberately do NOT snapshot client.getSkillExperience() here: at the
-		// LOGGED_IN moment the server has not yet sent the player's XP, so a snapshot would read 0
-		// and the post-login StatChanged events would report lifetime XP as a single session's gain.
-		lastUsername = client.getUsername();
-	}
-
-	/** Re-baseline only when the logged-in account changes; world hops keep the same session. */
-	public void onLogin()
-	{
-		if (!Objects.equals(client.getUsername(), lastUsername))
-		{
-			reset();
-		}
+		// Baselines are (re)established lazily by the first StatChanged per skill after a reset.
 	}
 
 	public void recordXp(Skill skill, int currentXp)

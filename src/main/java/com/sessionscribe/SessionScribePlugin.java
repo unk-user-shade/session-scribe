@@ -124,8 +124,6 @@ public class SessionScribePlugin extends Plugin
 		switch (event.getGameState())
 		{
 			case LOGGED_IN:
-				// Re-baseline only on an actual account change; world hops keep the session.
-				tracker.onLogin();
 				break;
 			case LOGIN_SCREEN:
 				// LOGIN_SCREEN is reached on logout (a world hop does not pass through it).
