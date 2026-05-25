@@ -24,7 +24,7 @@ public class WindowTest
 	{
 		assertEquals("Current session", Window.CURRENT.label());
 		assertEquals("Last 24 hours", Window.DAY.label());
-		assertEquals("This week", Window.WEEK.label());
+		assertEquals("Last 7 days", Window.WEEK.label());
 		assertEquals("All time", Window.ALL_TIME.label());
 	}
 }

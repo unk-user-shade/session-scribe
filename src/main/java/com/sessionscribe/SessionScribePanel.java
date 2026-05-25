@@ -32,6 +32,7 @@ public class SessionScribePanel extends PluginPanel
 
 	private final JComboBox<String> accountSelector = new JComboBox<>();
 	private final JComboBox<Window> windowSelector = new JComboBox<>(Window.values());
+	private final JLabel sessionContext = new JLabel(" ");
 	private final JButton skillToggle = new JButton();
 	private final JPanel skillBody = new JPanel();
 	private final JPanel lootBody = new JPanel();
@@ -60,6 +61,10 @@ public class SessionScribePanel extends PluginPanel
 		selectors.add(accountSelector);
 		selectors.add(windowSelector);
 		content.add(selectors);
+
+		sessionContext.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		sessionContext.setBorder(BorderFactory.createEmptyBorder(4, 0, 0, 0));
+		content.add(sessionContext);
 
 		final JPanel stats = new JPanel(new GridLayout(0, 2, 6, 4));
 		stats.setBorder(BorderFactory.createEmptyBorder(6, 0, 6, 0));
@@ -111,6 +116,7 @@ public class SessionScribePanel extends PluginPanel
 		xpValue.setText(Values.format(snapshot.totalXp, rounded));
 		gpValue.setText(Values.format(snapshot.totalLootValue, rounded) + " gp");
 		killsValue.setText(Integer.toString(snapshot.kills));
+		sessionContext.setText(snapshot.contextText);
 
 		final boolean showSkills = config.showSkillBreakdown();
 		skillToggle.setVisible(showSkills);
@@ -137,7 +143,11 @@ public class SessionScribePanel extends PluginPanel
 		}
 
 		lootBody.removeAll();
-		if (snapshot.lootRows.isEmpty())
+		if (!snapshot.itemizedLoot)
+		{
+			lootBody.add(mutedLabel("Top loot unavailable for this window"));
+		}
+		else if (snapshot.lootRows.isEmpty())
 		{
 			lootBody.add(mutedLabel("No loot yet"));
 		}
@@ -162,7 +172,7 @@ public class SessionScribePanel extends PluginPanel
 			final DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
 			if (accounts.isEmpty())
 			{
-				model.addElement("No account yet");
+				model.addElement("Log in to track account");
 				accountSelector.setEnabled(false);
 			}
 			else
@@ -302,9 +312,17 @@ public class SessionScribePanel extends PluginPanel
 		private final int kills;
 		private final List<SkillRow> skillRows;
 		private final List<LootRow> lootRows;
+		private final String contextText;
+		private final boolean itemizedLoot;
 
 		public Snapshot(long elapsedMillis, long totalXp, long totalLootValue, int kills,
 			List<SkillRow> skillRows, List<LootRow> lootRows)
+		{
+			this(elapsedMillis, totalXp, totalLootValue, kills, skillRows, lootRows, " ", true);
+		}
+
+		public Snapshot(long elapsedMillis, long totalXp, long totalLootValue, int kills,
+			List<SkillRow> skillRows, List<LootRow> lootRows, String contextText, boolean itemizedLoot)
 		{
 			this.elapsedMillis = elapsedMillis;
 			this.totalXp = totalXp;
@@ -312,6 +330,8 @@ public class SessionScribePanel extends PluginPanel
 			this.kills = kills;
 			this.skillRows = skillRows;
 			this.lootRows = lootRows;
+			this.contextText = contextText;
+			this.itemizedLoot = itemizedLoot;
 		}
 
 		public long elapsedMillis()

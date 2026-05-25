@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import javax.inject.Inject;
+import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -76,6 +77,7 @@ public class SessionScribePlugin extends Plugin
 	private long pendingLogoutMs;
 	private String selectedAccount;
 	private Window selectedWindow = Window.CURRENT;
+	private boolean continuedAfterRelog;
 
 	@Override
 	protected void startUp()
@@ -175,9 +177,12 @@ public class SessionScribePlugin extends Plugin
 	{
 		clientThread.invoke(() ->
 		{
+			final boolean archived = currentAccount != null && hasCurrentSessionData();
 			finalizeCurrent();
 			tracker.reset();
+			continuedAfterRelog = false;
 			pushUpdate();
+			SwingUtilities.invokeLater(() -> panel.showExportStatus(archived ? "Session archived" : "New session started"));
 		});
 	}
 
@@ -206,6 +211,8 @@ public class SessionScribePlugin extends Plugin
 			(long) config.relogGapMinutes() * 60_000))
 		{
 			pendingLogoutMs = 0;
+			continuedAfterRelog = true;
+			pushUpdate();
 			return;
 		}
 
@@ -213,6 +220,7 @@ public class SessionScribePlugin extends Plugin
 		currentAccount = account;
 		selectedAccount = account;
 		pendingLogoutMs = 0;
+		continuedAfterRelog = false;
 		tracker.reset();
 		pushUpdate();
 	}
@@ -300,9 +308,19 @@ public class SessionScribePlugin extends Plugin
 
 	private void requestClearHistory()
 	{
+		final String account = selectedAccount != null ? selectedAccount : currentAccount;
+		final String target = account == null ? "all local history" : "history for " + account;
+		final int choice = JOptionPane.showConfirmDialog(panel,
+			"Clear " + target + "?",
+			"Clear history",
+			JOptionPane.YES_NO_OPTION,
+			JOptionPane.WARNING_MESSAGE);
+		if (choice != JOptionPane.YES_OPTION)
+		{
+			return;
+		}
 		clientThread.invoke(() ->
 		{
-			final String account = selectedAccount != null ? selectedAccount : currentAccount;
 			if (account != null)
 			{
 				store.clearAccount(account);
@@ -332,7 +350,7 @@ public class SessionScribePlugin extends Plugin
 		final Aggregate aggregate = store.aggregate(account, window, System.currentTimeMillis(),
 			live, liveTally, itemManager::getItemPrice);
 		final boolean itemized = window == Window.CURRENT || window == Window.ALL_TIME;
-		final SessionScribePanel.Snapshot snapshot = toSnapshot(aggregate, itemized);
+		final SessionScribePanel.Snapshot snapshot = toSnapshot(aggregate, itemized, contextText(window, live != null));
 		final List<String> accountList = new ArrayList<>(store.accounts());
 		if (currentAccount != null && !accountList.contains(currentAccount))
 		{
@@ -354,7 +372,8 @@ public class SessionScribePlugin extends Plugin
 		final Map<Integer, Integer> liveTally = live != null ? tracker.getLootTally() : null;
 		final Aggregate aggregate = store.aggregate(account, window, System.currentTimeMillis(),
 			live, liveTally, itemManager::getItemPrice);
-		return toSnapshot(aggregate, window == Window.CURRENT || window == Window.ALL_TIME);
+		return toSnapshot(aggregate, window == Window.CURRENT || window == Window.ALL_TIME,
+			contextText(window, live != null));
 	}
 
 	private boolean shouldIncludeLive(String account)
@@ -368,7 +387,7 @@ public class SessionScribePlugin extends Plugin
 		return (account == null ? "Unknown" : account) + " - " + selectedWindow.label();
 	}
 
-	private SessionScribePanel.Snapshot toSnapshot(Aggregate aggregate, boolean itemized)
+	private SessionScribePanel.Snapshot toSnapshot(Aggregate aggregate, boolean itemized, String contextText)
 	{
 		final List<SessionScribePanel.SkillRow> skillRows = new ArrayList<>();
 		for (Map.Entry<Skill, Integer> entry : aggregate.xpBySkill.entrySet())
@@ -400,7 +419,37 @@ public class SessionScribePlugin extends Plugin
 			: lootRows;
 
 		return new SessionScribePanel.Snapshot(aggregate.durationMs, aggregate.totalXp(),
-			aggregate.lootValue, aggregate.kills, skillRows, topLoot);
+			aggregate.lootValue, aggregate.kills, skillRows, topLoot, contextText, itemized);
+	}
+
+	private boolean hasCurrentSessionData()
+	{
+		return tracker.getTotalXp() > 0 || tracker.getKills() > 0 || !tracker.getLootTally().isEmpty();
+	}
+
+	private String contextText(Window window, boolean includesLive)
+	{
+		if (window == Window.CURRENT)
+		{
+			if (continuedAfterRelog)
+			{
+				return "Continuing after relog";
+			}
+			return "Started " + formatAgo(tracker.getElapsedMillis()) + " ago";
+		}
+		return includesLive ? "Includes current session" : "Completed sessions only";
+	}
+
+	private static String formatAgo(long millis)
+	{
+		final long totalMinutes = Math.max(0, millis / 60_000);
+		final long hours = totalMinutes / 60;
+		final long minutes = totalMinutes % 60;
+		if (hours > 0)
+		{
+			return hours + "h " + minutes + "m";
+		}
+		return minutes + "m";
 	}
 
 	void onSelectionChanged(String account, Window window)

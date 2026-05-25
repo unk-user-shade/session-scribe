@@ -6,7 +6,7 @@ enum Window
 {
 	CURRENT("Current session"),
 	DAY("Last 24 hours", TimeUnit.DAYS.toMillis(1)),
-	WEEK("This week", TimeUnit.DAYS.toMillis(7)),
+	WEEK("Last 7 days", TimeUnit.DAYS.toMillis(7)),
 	ALL_TIME("All time");
 
 	private final String label;

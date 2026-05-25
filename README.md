@@ -11,7 +11,9 @@ into one view, plus a screenshot-friendly "report card" you can copy or save.
 
 - **Live side panel**, refreshed each game tick:
   - Account and time-window selectors for **Current session**, **Last 24 hours**,
-    **This week**, and **All time**
+    **Last 7 days**, and **All time**
+  - Session context text showing when the current session started, whether it
+    continued after a relog, or whether a history window includes the live session
   - Elapsed session time (`mm:ss`, or `hh:mm` past an hour)
   - Total XP gained, with a collapsible per-skill breakdown
   - Total loot value (GE prices) and a "Top loot" list with item icons + per-item value
@@ -21,7 +23,8 @@ into one view, plus a screenshot-friendly "report card" you can copy or save.
   - **Copy image** — places the recap on your system clipboard
   - **Save image** — writes a PNG to `.runelite/session-scribe/`
 - **New Session** button to archive the current session and start fresh.
-- **Clear history** button to remove stored history for the selected account.
+- **Clear history** button with confirmation before removing stored history for the
+  selected account.
 - Quick relogs to the same account continue the current session; account switches archive
   the previous session and start fresh.
 
@@ -34,12 +37,17 @@ empty history and keeps a `.corrupt` backup next to the history file.
 The window selector controls which aggregate is shown:
 
 - **Current session** shows only the live tracker and itemized top loot.
-- **Last 24 hours** and **This week** include completed sessions whose end time falls
+- **Last 24 hours** and **Last 7 days** include completed sessions whose end time falls
   inside the rolling window, plus the live session for the selected account.
 - **All time** uses the permanent per-account totals and includes itemized top loot.
 
 Detailed completed-session rows are retained for 90 days for rolling windows. All-time
 totals are kept until you clear history.
+
+`Current session` starts on plugin startup or when you click **New Session**. Logging out
+does not reset it immediately; logging back into the same account within the relog
+continuation window keeps it going. Switching accounts, exceeding the relog gap, or
+clicking **New Session** archives the previous session and starts a fresh one.
 
 ## Configuration
 
@@ -64,7 +72,7 @@ totals are kept until you clear history.
   Drop-less kills are not counted.
 - The first XP update per skill after a reset establishes the baseline and does not
   count as gained XP.
-- Last 24 hours and This week are session-granular windows and do not show itemized loot.
+- Last 24 hours and Last 7 days are session-granular windows and do not show itemized loot.
 
 ## Privacy
 
