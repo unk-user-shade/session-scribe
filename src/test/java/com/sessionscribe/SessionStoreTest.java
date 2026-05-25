@@ -3,11 +3,13 @@ package com.sessionscribe;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.IntUnaryOperator;
 import net.runelite.api.Skill;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class SessionStoreTest
@@ -77,5 +79,81 @@ public class SessionStoreTest
 		Aggregate agg = store.aggregate("Z", Window.CURRENT, 2000, current, new HashMap<>(), price);
 		assertEquals(1000L, agg.durationMs);
 		assertTrue(agg.xpBySkill.isEmpty());
+	}
+
+	@Test
+	public void rollingWindowsCountOnlySessionsEndingInsideThem()
+	{
+		SessionStore store = new SessionStore();
+		long now = TimeUnit.DAYS.toMillis(10);
+		IntUnaryOperator price = id -> 1;
+
+		long eightDaysAgo = now - TimeUnit.DAYS.toMillis(8);
+		store.finalizeSession("Z", new SessionRecord(eightDaysAgo, eightDaysAgo, 100, xp(10, 0), 5, 1), new HashMap<>(), price);
+
+		long threeDaysAgo = now - TimeUnit.DAYS.toMillis(3);
+		store.finalizeSession("Z", new SessionRecord(threeDaysAgo, threeDaysAgo, 200, xp(20, 0), 7, 2), new HashMap<>(), price);
+
+		long twoHoursAgo = now - TimeUnit.HOURS.toMillis(2);
+		store.finalizeSession("Z", new SessionRecord(twoHoursAgo, twoHoursAgo, 300, xp(30, 0), 9, 3), new HashMap<>(), price);
+
+		Aggregate day = store.aggregate("Z", Window.DAY, now, null, null, price);
+		assertEquals(300L, day.durationMs);
+		assertEquals(Integer.valueOf(30), day.xpBySkill.get(Skill.ATTACK));
+		assertEquals(9L, day.lootValue);
+		assertEquals(3, day.kills);
+		assertNull(day.lootTally);
+
+		Aggregate week = store.aggregate("Z", Window.WEEK, now, null, null, price);
+		assertEquals(500L, week.durationMs);
+		assertEquals(Integer.valueOf(50), week.xpBySkill.get(Skill.ATTACK));
+		assertEquals(16L, week.lootValue);
+		assertEquals(5, week.kills);
+		assertNull(week.lootTally);
+	}
+
+	@Test
+	public void rollingWindowsFoldInCurrentSession()
+	{
+		SessionStore store = new SessionStore();
+		long now = TimeUnit.DAYS.toMillis(10);
+		IntUnaryOperator price = id -> 1;
+
+		long twoHoursAgo = now - TimeUnit.HOURS.toMillis(2);
+		store.finalizeSession("Z", new SessionRecord(twoHoursAgo, twoHoursAgo, 300, xp(30, 0), 9, 3), new HashMap<>(), price);
+
+		SessionRecord current = new SessionRecord(now - 100, now, 100, xp(5, 4), 11, 1);
+		Aggregate day = store.aggregate("Z", Window.DAY, now, current, new HashMap<>(), price);
+
+		assertEquals(400L, day.durationMs);
+		assertEquals(Integer.valueOf(35), day.xpBySkill.get(Skill.ATTACK));
+		assertEquals(Integer.valueOf(4), day.xpBySkill.get(Skill.SLAYER));
+		assertEquals(20L, day.lootValue);
+		assertEquals(4, day.kills);
+		assertNull(day.lootTally);
+	}
+
+	@Test
+	public void retentionPrunesDetailedSessionsButKeepsAllTimeTotals()
+	{
+		SessionStore store = new SessionStore();
+		IntUnaryOperator price = id -> 1;
+		long now = TimeUnit.DAYS.toMillis(100);
+		long old = now - SessionStore.RETENTION_MS - 1;
+
+		store.finalizeSession("Z", new SessionRecord(old, old, 100, xp(10, 0), 5, 1), new HashMap<>(), price);
+		store.finalizeSession("Z", new SessionRecord(now, now, 200, xp(20, 0), 7, 2), new HashMap<>(), price);
+
+		Aggregate week = store.aggregate("Z", Window.WEEK, now, null, null, price);
+		assertEquals(200L, week.durationMs);
+		assertEquals(Integer.valueOf(20), week.xpBySkill.get(Skill.ATTACK));
+		assertEquals(7L, week.lootValue);
+		assertEquals(2, week.kills);
+
+		Aggregate all = store.aggregate("Z", Window.ALL_TIME, now, null, null, price);
+		assertEquals(300L, all.durationMs);
+		assertEquals(Integer.valueOf(30), all.xpBySkill.get(Skill.ATTACK));
+		assertEquals(12L, all.lootValue);
+		assertEquals(3, all.kills);
 	}
 }
