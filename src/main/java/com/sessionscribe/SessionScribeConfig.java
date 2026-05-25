@@ -19,14 +19,14 @@ public interface SessionScribeConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "autoResetOnLogout",
-		name = "Auto-reset on logout",
-		description = "Start a fresh session automatically when you log out to the login screen.",
-		position = 2
+		keyName = "relogGapMinutes",
+		name = "Relog continuation (min)",
+		description = "If you log back into the same account within this many minutes, the session continues instead of starting a new one.",
+		position = 4
 	)
-	default boolean autoResetOnLogout()
+	default int relogGapMinutes()
 	{
-		return false;
+		return 5;
 	}
 
 	@ConfigItem(
