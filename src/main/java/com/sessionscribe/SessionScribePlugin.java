@@ -8,10 +8,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ScheduledExecutorService;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.api.Player;
 import net.runelite.api.Skill;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
@@ -46,7 +49,16 @@ public class SessionScribePlugin extends Plugin
 	private SessionTracker tracker;
 
 	@Inject
+	private SessionStore store;
+
+	@Inject
+	private Client client;
+
+	@Inject
 	private ClientThread clientThread;
+
+	@Inject
+	private ScheduledExecutorService executor;
 
 	@Inject
 	private ItemManager itemManager;
@@ -60,6 +72,10 @@ public class SessionScribePlugin extends Plugin
 	private SessionScribePanel panel;
 	private NavigationButton navButton;
 	private long lastRefresh;
+	private String currentAccount;
+	private long pendingLogoutMs;
+	private String selectedAccount;
+	private Window selectedWindow = Window.CURRENT;
 
 	@Override
 	protected void startUp()
@@ -75,17 +91,22 @@ public class SessionScribePlugin extends Plugin
 			.build();
 		clientToolbar.addNavigation(navButton);
 
-		// reset() and the snapshot read the client, so do both on the client thread.
-		clientThread.invoke(() ->
+		executor.execute(() ->
 		{
-			tracker.reset();
-			pushUpdate();
+			store.load();
+			store.finalizeLeftoverPending(itemManager::getItemPrice);
+			clientThread.invoke(() ->
+			{
+				tracker.reset();
+				pushUpdate();
+			});
 		});
 	}
 
 	@Override
 	protected void shutDown()
 	{
+		finalizeCurrent();
 		clientToolbar.removeNavigation(navButton);
 		panel = null;
 		navButton = null;
@@ -120,18 +141,13 @@ public class SessionScribePlugin extends Plugin
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged event)
 	{
-		// Game events are dispatched on the client thread, so it is safe to mutate the tracker here.
 		switch (event.getGameState())
 		{
 			case LOGGED_IN:
+				handleLogin();
 				break;
 			case LOGIN_SCREEN:
-				// LOGIN_SCREEN is reached on logout (a world hop does not pass through it).
-				if (config.autoResetOnLogout())
-				{
-					tracker.reset();
-					pushUpdate();
-				}
+				handleLogout();
 				break;
 			default:
 				break;
@@ -152,11 +168,92 @@ public class SessionScribePlugin extends Plugin
 
 	private void requestNewSession()
 	{
-		// Button click arrives on the EDT; reset() reads the client, so bounce to the client thread.
 		clientThread.invoke(() ->
 		{
+			finalizeCurrent();
 			tracker.reset();
 			pushUpdate();
+		});
+	}
+
+	private void handleLogin()
+	{
+		final Player local = client.getLocalPlayer();
+		if (local == null || local.getName() == null)
+		{
+			return;
+		}
+		final String account = local.getName();
+
+		if (currentAccount == null)
+		{
+			currentAccount = account;
+			if (selectedAccount == null)
+			{
+				selectedAccount = account;
+			}
+			pendingLogoutMs = 0;
+			return;
+		}
+
+		if (account.equals(currentAccount) && SessionStore.withinGap(pendingLogoutMs, System.currentTimeMillis(),
+			(long) config.relogGapMinutes() * 60_000))
+		{
+			pendingLogoutMs = 0;
+			return;
+		}
+
+		finalizeCurrent();
+		currentAccount = account;
+		selectedAccount = account;
+		pendingLogoutMs = 0;
+		tracker.reset();
+		pushUpdate();
+	}
+
+	private void handleLogout()
+	{
+		if (currentAccount == null)
+		{
+			return;
+		}
+		pendingLogoutMs = System.currentTimeMillis();
+		final SessionRecord record = snapshotRecord();
+		final Map<Integer, Integer> tally = tracker.getLootTally();
+		final String account = currentAccount;
+		final long logoutMs = pendingLogoutMs;
+		executor.execute(() -> store.savePending(account, record, tally, logoutMs));
+	}
+
+	private SessionRecord snapshotRecord()
+	{
+		final long now = System.currentTimeMillis();
+		final long duration = tracker.getElapsedMillis();
+		return new SessionRecord(now - duration, now, duration,
+			tracker.getXpBySkill(), tracker.getTotalLootValue(), tracker.getKills());
+	}
+
+	private void finalizeCurrent()
+	{
+		if (currentAccount == null)
+		{
+			return;
+		}
+		final boolean empty = tracker.getTotalXp() == 0 && tracker.getKills() == 0
+			&& tracker.getLootTally().isEmpty();
+		if (empty)
+		{
+			store.clearPending(currentAccount);
+			return;
+		}
+		final SessionRecord record = snapshotRecord();
+		final Map<Integer, Integer> tally = tracker.getLootTally();
+		final String account = currentAccount;
+		executor.execute(() ->
+		{
+			store.finalizeSession(account, record, tally, itemManager::getItemPrice);
+			store.clearPending(account);
+			store.save();
 		});
 	}
 

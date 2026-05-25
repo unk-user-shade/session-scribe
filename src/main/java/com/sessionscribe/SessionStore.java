@@ -65,6 +65,55 @@ class SessionStore
 		IntUnaryOperator priceFn)
 	{
 		AccountHistory history = accounts.computeIfAbsent(account, k -> new AccountHistory());
+		finalizeSessionInternal(history, record, lootTally, priceFn);
+	}
+
+	synchronized void finalizeLeftoverPending(IntUnaryOperator priceFn)
+	{
+		for (Map.Entry<String, AccountHistory> entry : accounts.entrySet())
+		{
+			AccountHistory history = entry.getValue();
+			PendingSession pending = history.pending;
+			if (pending == null)
+			{
+				continue;
+			}
+			long end = pending.startMs + pending.durationMs;
+			SessionRecord record = new SessionRecord(pending.startMs, end, pending.durationMs,
+				pending.xpBySkill, pending.lootValue, pending.kills);
+			finalizeSessionInternal(history, record, pending.lootTally, priceFn);
+			history.pending = null;
+		}
+		save();
+	}
+
+	synchronized void savePending(String account, SessionRecord record, Map<Integer, Integer> lootTally, long logoutMs)
+	{
+		AccountHistory history = accounts.computeIfAbsent(account, k -> new AccountHistory());
+		PendingSession pending = new PendingSession();
+		pending.startMs = record.startMs;
+		pending.durationMs = record.durationMs;
+		pending.xpBySkill = record.xpBySkill;
+		pending.lootValue = record.lootValue;
+		pending.kills = record.kills;
+		pending.lootTally = lootTally == null ? new HashMap<>() : new HashMap<>(lootTally);
+		pending.logoutMs = logoutMs;
+		history.pending = pending;
+		save();
+	}
+
+	synchronized void clearPending(String account)
+	{
+		AccountHistory history = accounts.get(account);
+		if (history != null)
+		{
+			history.pending = null;
+		}
+	}
+
+	private void finalizeSessionInternal(AccountHistory history, SessionRecord record, Map<Integer, Integer> lootTally,
+		IntUnaryOperator priceFn)
+	{
 		history.sessions.add(record);
 
 		AllTimeStats all = history.allTime;
