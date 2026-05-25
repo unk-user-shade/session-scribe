@@ -215,7 +215,7 @@ class SessionStore
 		}
 		try (Reader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8))
 		{
-			HistoryFile parsed = gson().fromJson(reader, HistoryFile.class);
+			HistoryFile parsed = gson.fromJson(reader, HistoryFile.class);
 			accounts = parsed != null && parsed.accounts != null ? parsed.accounts : new LinkedHashMap<>();
 		}
 		catch (Exception e)
@@ -241,7 +241,7 @@ class SessionStore
 		{
 			HistoryFile out = new HistoryFile();
 			out.accounts = accounts;
-			gson().toJson(out, writer);
+			gson.toJson(out, writer);
 		}
 		catch (IOException e)
 		{
@@ -287,11 +287,6 @@ class SessionStore
 	synchronized Map<String, AccountHistory> exportForTest()
 	{
 		return accounts;
-	}
-
-	private Gson gson()
-	{
-		return gson == null ? new Gson() : gson;
 	}
 
 	private static File historyFile()
