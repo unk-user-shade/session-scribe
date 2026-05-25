@@ -81,7 +81,7 @@ public class SessionScribePlugin extends Plugin
 	protected void startUp()
 	{
 		panel = new SessionScribePanel(config, this::requestNewSession, this::requestCopyImage,
-			this::requestSaveImage, this::onSelectionChanged);
+			this::requestSaveImage, this::requestClearHistory, this::onSelectionChanged);
 
 		final BufferedImage icon = ImageUtil.loadImageResource(SessionScribePlugin.class, "icon.png");
 		navButton = NavigationButton.builder()
@@ -290,6 +290,26 @@ public class SessionScribePlugin extends Plugin
 			}
 			final String result = message;
 			SwingUtilities.invokeLater(() -> panel.showExportStatus(result));
+		});
+	}
+
+	private void requestClearHistory()
+	{
+		clientThread.invoke(() ->
+		{
+			final String account = selectedAccount != null ? selectedAccount : currentAccount;
+			if (account != null)
+			{
+				store.clearAccount(account);
+				selectedAccount = currentAccount;
+			}
+			else
+			{
+				store.clearAll();
+			}
+			executor.execute(store::save);
+			pushUpdate();
+			SwingUtilities.invokeLater(() -> panel.showExportStatus("History cleared"));
 		});
 	}
 

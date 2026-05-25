@@ -43,7 +43,7 @@ public class SessionScribePanel extends PluginPanel
 	private boolean updatingAccounts;
 
 	public SessionScribePanel(SessionScribeConfig config, Runnable onNewSession, Runnable onCopyImage,
-		Runnable onSaveImage, BiConsumer<String, Window> onSelectionChanged)
+		Runnable onSaveImage, Runnable onClearHistory, BiConsumer<String, Window> onSelectionChanged)
 	{
 		this.config = config;
 		this.onSelectionChanged = onSelectionChanged;
@@ -92,6 +92,7 @@ public class SessionScribePanel extends PluginPanel
 		actions.add(actionButton("New Session", onNewSession));
 		actions.add(actionButton("Copy image", onCopyImage));
 		actions.add(actionButton("Save image", onSaveImage));
+		actions.add(actionButton("Clear history", onClearHistory));
 		content.add(actions);
 
 		status.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
